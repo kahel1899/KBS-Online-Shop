@@ -121,7 +121,7 @@
                         </p>
                         <v-btn
                             v-if="!loading"
-                            to="/Inventory"
+                            to="/admin/inventory"
                             variant="tonal"
                             color="primary"
                             class="mt-3"

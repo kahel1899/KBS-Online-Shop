@@ -13,7 +13,7 @@ class SalesController extends Controller
     {
    $request->validate([
     'product_id' => 'required|exists:kookuproducts,id',
-    'platform' => 'required|in:TikTok,Shopee,Walk-in',
+    'platform' => 'required|in:TikTok,Shopee,Walk-in,Online',
     'quantity' => 'required|integer|min:1',
     'selling_price' => 'required|numeric|min:0',
 ]);

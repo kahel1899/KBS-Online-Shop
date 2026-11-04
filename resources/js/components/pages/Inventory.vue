@@ -144,6 +144,13 @@
                             {{ stockText(product) }}
                         </v-chip>
 
+                        <span
+                            class="ki-shop"
+                            :class="{ 'is-live': product.is_active && Number(product.online_price) > 0 }"
+                        >
+                            {{ product.is_active && Number(product.online_price) > 0 ? 'Live in shop' : 'Not in shop' }}
+                        </span>
+
                         <dl class="ki-prices">
                             <div v-for="row in priceRows(product)" :key="row.name">
                                 <dt>
@@ -280,6 +287,74 @@
                                     :rules="[nonNegative]"
                                 />
                             </v-col>
+
+                            <v-col cols="12">
+                                <div class="ki-shopsec">Online shop</div>
+                            </v-col>
+
+                            <v-col cols="12" sm="6">
+                                <v-text-field
+                                    v-model.number="newProduct.online_price"
+                                    label="Online price"
+                                    type="number"
+                                    min="0"
+                                    prefix="₱"
+                                    hint="0 keeps it out of the shop"
+                                    persistent-hint
+                                    variant="outlined"
+                                    density="comfortable"
+                                    :rules="[nonNegative]"
+                                />
+                            </v-col>
+
+                            <v-col cols="12" sm="6">
+                                <label class="kbs-field-label" for="product-category">Category</label>
+                                <select id="product-category" v-model="newProduct.category_id" class="kbs-select ki-fullselect">
+                                    <option :value="null">No category</option>
+                                    <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                            </v-col>
+
+                            <v-col cols="12">
+                                <label class="kbs-field-label" for="product-description">Description</label>
+                                <textarea
+                                    id="product-description"
+                                    v-model="newProduct.description"
+                                    class="kbs-textarea"
+                                    rows="3"
+                                    placeholder="What it is, shade or size, how to use it…"
+                                ></textarea>
+                            </v-col>
+
+                            <v-col cols="12">
+                                <label class="kbs-field-label" for="product-images">More picture links (one per line)</label>
+                                <textarea
+                                    id="product-images"
+                                    v-model="newProduct.imagesText"
+                                    class="kbs-textarea"
+                                    rows="2"
+                                    placeholder="https://…"
+                                ></textarea>
+                            </v-col>
+
+                            <v-col cols="12" sm="6">
+                                <v-switch
+                                    v-model="newProduct.is_active"
+                                    label="Show in the online shop"
+                                    color="primary"
+                                    hide-details
+                                    density="comfortable"
+                                />
+                            </v-col>
+                            <v-col cols="12" sm="6">
+                                <v-switch
+                                    v-model="newProduct.is_featured"
+                                    label="Feature on the home page"
+                                    color="primary"
+                                    hide-details
+                                    density="comfortable"
+                                />
+                            </v-col>
                         </v-row>
                     </v-card-text>
 
@@ -325,53 +400,26 @@
             </v-dialog>
 
             <!-- RECORD SALE -->
-            <v-dialog v-model="saleDialog" max-width="520" :transition="false">
+            <v-dialog v-model="saleDialog" max-width="520">
                 <v-card class="ki-dialog">
                     <v-card-title class="ki-dialog__title">Record sale</v-card-title>
 
                     <v-card-text>
-                        <v-select
+                        <DropSelect
                             v-model="newSale.product_id"
-                            :items="products"
-                            item-title="name"
-                            item-value="id"
+                            :items="productItems"
                             label="Product"
-                            variant="outlined"
-                            density="comfortable"
+                            placeholder="Choose a product"
                             :hint="selectedSaleProduct ? `${selectedSaleProduct.quantity} in stock` : ''"
-                            persistent-hint
-                            :menu-props="{ location: 'bottom', maxHeight: 240, transition: false }"
-                        >
-                            <template #item="{ props, item }">
-                                <v-list-item
-                                    v-bind="props"
-                                    :disabled="Number(item.raw.quantity) < 1"
-                                    :subtitle="Number(item.raw.quantity) < 1
-                                        ? 'Out of stock'
-                                        : `${item.raw.quantity} in stock`"
-                                />
-                            </template>
-                        </v-select>
+                        />
 
-                        <div class="ki-platform-label">Platform</div>
-                        <v-btn-toggle
+                        <DropSelect
                             v-model="newSale.platform"
-                            divided
-                            variant="outlined"
-                            color="primary"
-                            density="comfortable"
-                            rounded="lg"
-                            class="ki-platform-toggle"
-                            aria-label="Platform"
-                        >
-                            <v-btn
-                                v-for="name in platformNames"
-                                :key="name"
-                                :value="name"
-                            >
-                                {{ name }}
-                            </v-btn>
-                        </v-btn-toggle>
+                            :items="platformItems"
+                            label="Platform"
+                            placeholder="Choose a platform"
+                            class="mt-4"
+                        />
 
                         <v-row dense class="mt-1">
                             <v-col cols="12" sm="6">
@@ -520,6 +568,7 @@
 
 <script>
 import axios from "axios";
+import DropSelect from '../DropSelect.vue'
 import {
     API,
     PLATFORMS,
@@ -540,6 +589,12 @@ const emptyProduct = () => ({
     cost: 0,
     tiktok_price: 0,
     shopee_price: 0,
+    category_id: null,
+    description: '',
+    online_price: 0,
+    is_active: false,
+    is_featured: false,
+    imagesText: '',
 })
 
 const emptySale = () => ({
@@ -550,6 +605,8 @@ const emptySale = () => ({
 })
 
 export default {
+    components: { DropSelect },
+
     data() {
         return {
             products: [],
@@ -568,6 +625,7 @@ export default {
             dialog: false,
             title: 'Add',
             newProduct: emptyProduct(),
+            categories: [],
             saving: false,
 
             deleteDialog: false,
@@ -589,6 +647,7 @@ export default {
 
     mounted() {
         this.getProducts();
+        this.loadCategories();
     },
 
     computed: {
@@ -649,6 +708,22 @@ export default {
             return list
         },
 
+        productItems() {
+            return this.products.map(p => {
+                const qty = Number(p.quantity) || 0
+                return {
+                    value: p.id,
+                    title: p.name,
+                    subtitle: qty < 1 ? 'Out of stock' : `${qty} in stock`,
+                    disabled: qty < 1,
+                }
+            })
+        },
+
+        platformItems() {
+            return this.platformNames.map(name => ({ value: name, title: name }))
+        },
+
         selectedSaleProduct() {
             return this.products.find(
                 product => product.id === this.newSale.product_id
@@ -662,6 +737,7 @@ export default {
             switch (this.newSale.platform) {
                 case 'TikTok': return Number(p.tiktok_price) || 0
                 case 'Shopee': return Number(p.shopee_price) || 0
+                case 'Online': return Number(p.online_price) || 0
                 case 'Walk-in': return Number(p.price) || 0
                 default: return 0
             }
@@ -693,7 +769,7 @@ export default {
 
         productValid() {
             const p = this.newProduct
-            const fields = ['quantity', 'cost', 'price', 'tiktok_price', 'shopee_price']
+            const fields = ['quantity', 'cost', 'price', 'tiktok_price', 'shopee_price', 'online_price']
             return (
                 !!String(p.name || '').trim() &&
                 fields.every(f => p[f] === 0 || (p[f] !== '' && p[f] !== null && Number(p[f]) >= 0))
@@ -770,6 +846,7 @@ export default {
                 { name: 'Walk-in', color: platformColor('Walk-in'), value: product.price },
                 { name: 'TikTok', color: platformColor('TikTok'), value: product.tiktok_price },
                 { name: 'Shopee', color: platformColor('Shopee'), value: product.shopee_price },
+                { name: 'Online', color: platformColor('Online'), value: product.online_price },
             ]
         },
 
@@ -787,6 +864,15 @@ export default {
         applySuggestedPrice() {
             if (this.suggestedPrice > 0) {
                 this.newSale.selling_price = this.suggestedPrice
+            }
+        },
+
+        async loadCategories() {
+            try {
+                const response = await axios.get(`${API}/admin/categories`);
+                this.categories = response.data;
+            } catch (error) {
+                console.error(error);
             }
         },
 
@@ -811,7 +897,16 @@ export default {
 
         editProduct(product) {
             this.title = 'Edit'
-            this.newProduct = { ...product };
+            this.newProduct = {
+                ...emptyProduct(),
+                ...product,
+                description: product.description || '',
+                category_id: product.category_id || null,
+                online_price: Number(product.online_price) || 0,
+                is_active: !!product.is_active,
+                is_featured: !!product.is_featured,
+                imagesText: (product.images || []).map(i => i.url).join('\n'),
+            };
             this.dialog = true
         },
 
@@ -829,6 +924,15 @@ export default {
                 cost: Number(p.cost) || 0,
                 tiktok_price: Number(p.tiktok_price) || 0,
                 shopee_price: Number(p.shopee_price) || 0,
+                category_id: p.category_id || null,
+                description: (p.description || '').trim() || null,
+                online_price: Number(p.online_price) || 0,
+                is_active: !!p.is_active,
+                is_featured: !!p.is_featured,
+                images: String(p.imagesText || '')
+                    .split('\n')
+                    .map(line => line.trim())
+                    .filter(Boolean),
             }
 
             try {
@@ -1085,6 +1189,31 @@ export default {
     min-height: 2.5em;
 }
 
+.ki-shop {
+    align-self: flex-start;
+    margin: -6px 0 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--kbs-muted);
+}
+
+.ki-shop.is-live {
+    color: var(--kbs-profit);
+}
+
+.ki-shopsec {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--kbs-line);
+    font-family: var(--kbs-font-display);
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.ki-fullselect {
+    width: 100%;
+}
+
 .ki-chip {
     align-self: flex-start;
     margin-bottom: 12px;
@@ -1176,24 +1305,6 @@ export default {
 .ki-dialog__actions {
     padding: 8px 20px 18px;
     gap: 4px;
-}
-
-.ki-platform-label {
-    margin: 16px 0 6px;
-    font-size: 13px;
-    color: var(--kbs-muted);
-}
-
-.ki-platform-toggle {
-    display: flex;
-    width: 100%;
-    height: 48px;
-    margin-bottom: 8px;
-}
-
-.ki-platform-toggle .v-btn {
-    flex: 1 1 0;
-    height: 100%;
 }
 
 .ki-saletotal {

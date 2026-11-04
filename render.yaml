@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: kooku-inventory
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /robots.txt
+    envVars:
+      - key: APP_NAME
+        value: Kooku Beauty Supplies
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false            # php artisan key:generate --show
+      - key: ADMIN_EMAIL
+        sync: false            # your admin login email
+      - key: ADMIN_PASSWORD
+        sync: false            # long, unique password
+      - key: SHOP_GCASH_NAME
+        sync: false            # name on your GCash account
+      - key: SHOP_GCASH_NUMBER
+        sync: false            # e.g. 09XX XXX XXXX
+      - key: SHOP_CONTACT_PHONE
+        sync: false
+      - key: SHOP_SHIPPING_FEE
+        value: "100"
+      - key: SHOP_FREE_SHIPPING_MIN
+        value: "1500"
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kooku-db
+          property: connectionString
+
+databases:
+  - name: kooku-db
+    plan: free
+    region: singapore

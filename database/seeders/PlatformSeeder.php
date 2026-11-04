@@ -9,19 +9,19 @@ class PlatformSeeder extends Seeder
 {
     public function run()
     {
-        Platform::create([
-            'name' => 'TikTok',
-            'fee_percentage' => 10.00,
-        ]);
+        // firstOrCreate: safe to run many times, never overwrites fees you changed
+        $platforms = [
+            ['TikTok', 10.00],
+            ['Shopee', 15.00],
+            ['Walk-in', 0.00],
+            ['Online', 0.00],
+        ];
 
-        Platform::create([
-            'name' => 'Shopee',
-            'fee_percentage' => 15.00,
-        ]);
-
-        Platform::create([
-            'name' => 'Walk-in',
-            'fee_percentage' => 0.00,
-        ]);
+        foreach ($platforms as [$name, $fee]) {
+            Platform::firstOrCreate(
+                ['name' => $name],
+                ['fee_percentage' => $fee]
+            );
+        }
     }
 }
