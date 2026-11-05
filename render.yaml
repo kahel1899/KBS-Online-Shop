@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: kooku-inventory
+    name: kookubeautysupplies
     runtime: docker
     plan: free
     region: singapore
@@ -14,15 +14,15 @@ services:
       - key: APP_DEBUG
         value: "false"
       - key: APP_KEY
-        sync: false            # php artisan key:generate --show
+        sync: false # php artisan key:generate --show
       - key: ADMIN_EMAIL
-        sync: false            # your admin login email
+        sync: false # your admin login email
       - key: ADMIN_PASSWORD
-        sync: false            # long, unique password
+        sync: false # long, unique password
       - key: SHOP_GCASH_NAME
-        sync: false            # name on your GCash account
+        sync: false # name on your GCash account
       - key: SHOP_GCASH_NUMBER
-        sync: false            # e.g. 09XX XXX XXXX
+        sync: false # e.g. 09XX XXX XXXX
       - key: SHOP_CONTACT_PHONE
         sync: false
       - key: SHOP_SHIPPING_FEE
