@@ -215,13 +215,8 @@
                             </v-col>
 
                             <v-col cols="12">
-                                <v-text-field
-                                    v-model="newProduct.image"
-                                    label="Image URL (optional)"
-                                    variant="outlined"
-                                    density="comfortable"
-                                    hide-details="auto"
-                                />
+                                <span class="kbs-field-label">Photos</span>
+                                <ImageUpload v-model="newProduct.photos" :max="8" />
                             </v-col>
 
                             <v-col cols="12" sm="6">
@@ -323,17 +318,6 @@
                                     class="kbs-textarea"
                                     rows="3"
                                     placeholder="What it is, shade or size, how to use it…"
-                                ></textarea>
-                            </v-col>
-
-                            <v-col cols="12">
-                                <label class="kbs-field-label" for="product-images">More picture links (one per line)</label>
-                                <textarea
-                                    id="product-images"
-                                    v-model="newProduct.imagesText"
-                                    class="kbs-textarea"
-                                    rows="2"
-                                    placeholder="https://…"
                                 ></textarea>
                             </v-col>
 
@@ -569,6 +553,7 @@
 <script>
 import axios from "axios";
 import DropSelect from '../DropSelect.vue'
+import ImageUpload from '../ImageUpload.vue'
 import {
     API,
     PLATFORMS,
@@ -594,7 +579,7 @@ const emptyProduct = () => ({
     online_price: 0,
     is_active: false,
     is_featured: false,
-    imagesText: '',
+    photos: [],
 })
 
 const emptySale = () => ({
@@ -605,7 +590,7 @@ const emptySale = () => ({
 })
 
 export default {
-    components: { DropSelect },
+    components: { DropSelect, ImageUpload },
 
     data() {
         return {
@@ -905,7 +890,7 @@ export default {
                 online_price: Number(product.online_price) || 0,
                 is_active: !!product.is_active,
                 is_featured: !!product.is_featured,
-                imagesText: (product.images || []).map(i => i.url).join('\n'),
+                photos: [product.image, ...(product.images || []).map(i => i.url)].filter(Boolean),
             };
             this.dialog = true
         },
@@ -918,7 +903,7 @@ export default {
             const p = this.newProduct
             const payload = {
                 name: String(p.name).trim(),
-                image: p.image || '',
+                image: (p.photos && p.photos[0]) || null,
                 quantity: Number(p.quantity) || 0,
                 price: Number(p.price) || 0,
                 cost: Number(p.cost) || 0,
@@ -929,10 +914,7 @@ export default {
                 online_price: Number(p.online_price) || 0,
                 is_active: !!p.is_active,
                 is_featured: !!p.is_featured,
-                images: String(p.imagesText || '')
-                    .split('\n')
-                    .map(line => line.trim())
-                    .filter(Boolean),
+                images: (p.photos || []).slice(1),
             }
 
             try {

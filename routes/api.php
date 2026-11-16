@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\Shop\CatalogController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Admin\OrderController;
 */
 
 // ---------- 1. Public ----------
+Route::get('/images/{id}', [ImageController::class, 'show'])->whereNumber('id');
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
@@ -67,6 +69,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('/sales', [SalesController::class, 'index']);
 
     Route::prefix('admin')->group(function () {
+        Route::post('/images', [ImageController::class, 'store']);
         Route::get('/summary', [OrderController::class, 'summary']);
 
         Route::get('/categories', [CategoryController::class, 'index']);

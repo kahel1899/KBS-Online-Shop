@@ -50,7 +50,8 @@
                 <v-card-title class="ac__dlg-title">{{ editingId ? 'Edit category' : 'Add category' }}</v-card-title>
                 <v-card-text>
                     <v-text-field v-model="form.name" label="Name" variant="outlined" density="comfortable" :error-messages="errors.name" />
-                    <v-text-field v-model="form.image" label="Image link (optional)" variant="outlined" density="comfortable" />
+                    <span class="kbs-field-label">Picture (optional)</span>
+                    <ImageUpload v-model="form.photos" :max="1" class="mb-4" />
                     <v-textarea v-model="form.description" label="Description (optional)" rows="2" auto-grow variant="outlined" density="comfortable" />
                     <v-text-field v-model.number="form.sort_order" label="Show order (smallest first)" type="number" min="0" variant="outlined" density="comfortable" />
                     <v-switch v-model="form.is_active" label="Visible in the shop" color="primary" hide-details density="comfortable" />
@@ -84,11 +85,14 @@
 
 <script>
 import axios from 'axios'
+import ImageUpload from '../../ImageUpload.vue'
 import { API, apiError } from '../../../utils.js'
 
-const blank = () => ({ name: '', image: '', description: '', sort_order: 0, is_active: true })
+const blank = () => ({ name: '', photos: [], description: '', sort_order: 0, is_active: true })
 
 export default {
+    components: { ImageUpload },
+
     data() {
         return {
             categories: [],
@@ -141,7 +145,7 @@ export default {
             this.editingId = c.id
             this.form = {
                 name: c.name,
-                image: c.image || '',
+                photos: c.image ? [c.image] : [],
                 description: c.description || '',
                 sort_order: c.sort_order,
                 is_active: !!c.is_active,
@@ -162,7 +166,7 @@ export default {
             this.saving = true
             const payload = {
                 name: this.form.name.trim(),
-                image: this.form.image.trim() || null,
+                image: this.form.photos[0] || null,
                 description: this.form.description.trim() || null,
                 sort_order: Number(this.form.sort_order) || 0,
                 is_active: !!this.form.is_active,
