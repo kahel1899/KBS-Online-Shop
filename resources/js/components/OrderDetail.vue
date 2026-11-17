@@ -108,6 +108,7 @@
                     </div>
                     <div class="od-items__name">
                         {{ item.name }}
+                        <small v-if="item.variant_name">{{ item.variant_name }}</small>
                         <small>{{ item.quantity }} × {{ peso(item.price) }}</small>
                     </div>
                     <strong>{{ peso(item.line_total) }}</strong>

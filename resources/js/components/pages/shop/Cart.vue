@@ -12,7 +12,7 @@
         <div v-else class="cart__layout">
             <section aria-label="Items in your cart">
                 <ul class="lines">
-                    <li v-for="item in cart.items" :key="item.id" class="line" :class="{ 'is-bad': item.unavailable || item.stock < 1 }">
+                    <li v-for="item in cart.items" :key="item.key" class="line" :class="{ 'is-bad': item.unavailable || item.stock < 1 }">
                         <router-link :to="`/product/${item.slug}`" class="line__img" :aria-label="item.name">
                             <img v-if="item.image" :src="item.image" alt="" />
                             <v-icon v-else size="26" color="secondary">mdi-image-outline</v-icon>
@@ -20,6 +20,7 @@
 
                         <div class="line__info">
                             <router-link :to="`/product/${item.slug}`" class="line__name">{{ item.name }}</router-link>
+                            <span v-if="item.variant_name" class="line__variant">{{ item.variant_name }}</span>
                             <span class="line__price">{{ peso(item.price) }} each</span>
                             <span v-if="item.unavailable" class="line__warn">No longer available. Please remove it.</span>
                             <span v-else-if="item.stock < 1" class="line__warn">Sold out. Please remove it.</span>
@@ -27,18 +28,18 @@
                         </div>
 
                         <div class="line__qty" role="group" :aria-label="`Quantity of ${item.name}`">
-                            <button type="button" :disabled="item.qty <= 1" aria-label="Decrease quantity" @click="cart.setQty(item.id, item.qty - 1)">
+                            <button type="button" :disabled="item.qty <= 1" aria-label="Decrease quantity" @click="cart.setQty(item.key, item.qty - 1)">
                                 <v-icon size="16">mdi-minus</v-icon>
                             </button>
                             <span>{{ item.qty }}</span>
-                            <button type="button" :disabled="item.qty >= item.stock" aria-label="Increase quantity" @click="cart.setQty(item.id, item.qty + 1)">
+                            <button type="button" :disabled="item.qty >= item.stock" aria-label="Increase quantity" @click="cart.setQty(item.key, item.qty + 1)">
                                 <v-icon size="16">mdi-plus</v-icon>
                             </button>
                         </div>
 
                         <strong class="line__total">{{ peso(item.price * item.qty) }}</strong>
 
-                        <button type="button" class="line__remove" :aria-label="`Remove ${item.name}`" @click="cart.remove(item.id)">
+                        <button type="button" class="line__remove" :aria-label="`Remove ${item.name}`" @click="cart.remove(item.key)">
                             <v-icon size="20">mdi-close</v-icon>
                         </button>
                     </li>
@@ -196,6 +197,12 @@ export default {
 }
 
 .line__name:hover {
+    color: var(--kbs-brand);
+}
+
+.line__variant {
+    font-size: 14px;
+    font-weight: 600;
     color: var(--kbs-brand);
 }
 

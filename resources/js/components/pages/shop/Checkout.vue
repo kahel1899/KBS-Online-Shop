@@ -82,8 +82,11 @@
             <aside class="co__sum" aria-label="Order summary">
                 <h2>Order summary</h2>
                 <ul class="co__items">
-                    <li v-for="item in cart.items" :key="item.id">
-                        <span class="co__items-name">{{ item.name }} <small>× {{ item.qty }}</small></span>
+                    <li v-for="item in cart.items" :key="item.key">
+                        <span class="co__items-name">
+                            {{ item.name }}<template v-if="item.variant_name"> ({{ item.variant_name }})</template>
+                            <small>× {{ item.qty }}</small>
+                        </span>
                         <span>{{ peso(item.price * item.qty) }}</span>
                     </li>
                 </ul>
@@ -248,7 +251,7 @@ export default {
                 shipping_postal_code: f.postal.trim() || null,
                 payment_method: f.method,
                 notes: f.notes.trim() || null,
-                items: this.cart.items.map(i => ({ product_id: i.id, quantity: i.qty })),
+                items: this.cart.items.map(i => ({ product_id: i.id, variant_id: i.variant_id || null, quantity: i.qty })),
             }
 
             this.submitting = true

@@ -25,16 +25,22 @@
             </h3>
 
             <div class="pc__row">
-                <strong class="pc__price">{{ peso(product.price) }}</strong>
+                <strong class="pc__price">
+                    <small v-if="product.price_max > product.price">From </small>{{ peso(product.price) }}
+                </strong>
                 <button
                     type="button"
                     class="pc__add"
                     :class="{ 'is-added': added }"
                     :disabled="product.stock < 1"
-                    :aria-label="`Add ${product.name} to cart`"
+                    :aria-label="product.has_variants
+                        ? `Choose a ${product.variant_label.toLowerCase()} for ${product.name}`
+                        : `Add ${product.name} to cart`"
                     @click="add"
                 >
-                    <v-icon size="20">{{ added ? 'mdi-check' : 'mdi-cart-plus' }}</v-icon>
+                    <v-icon size="20">
+                        {{ added ? 'mdi-check' : product.has_variants ? 'mdi-tune-variant' : 'mdi-cart-plus' }}
+                    </v-icon>
                 </button>
             </div>
         </div>
@@ -64,6 +70,12 @@ export default {
         peso,
 
         add() {
+            // products with options need a choice first, so open the product page
+            if (this.product.has_variants) {
+                this.$router.push(`/product/${this.product.slug}`)
+                return
+            }
+
             useCartStore().add(this.product, 1)
             this.added = true
             clearTimeout(this.timer)
@@ -178,6 +190,12 @@ export default {
 .pc__price {
     font-size: 18px;
     font-variant-numeric: tabular-nums;
+}
+
+.pc__price small {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--kbs-muted);
 }
 
 .pc__add {

@@ -43,15 +43,35 @@
                 <!-- Info -->
                 <div class="pd__info">
                     <h1 class="kbs-h2 pd__title">{{ product.name }}</h1>
-                    <div class="pd__price">{{ peso(product.price) }}</div>
+                    <div class="pd__price">
+                        <small v-if="!variant && product.price_max > product.price">From </small>{{ peso(shownPrice) }}
+                    </div>
 
-                    <p v-if="product.stock < 1" class="pd__stock pd__stock--out">Sold out</p>
-                    <p v-else-if="product.stock <= 5" class="pd__stock pd__stock--low">
-                        Only {{ product.stock }} left
-                    </p>
-                    <p v-else class="pd__stock">In stock</p>
+                    <div v-if="product.has_variants" class="pd__variants" role="radiogroup" :aria-label="product.variant_label">
+                        <div class="pd__vlabel">
+                            {{ product.variant_label }}<span v-if="variant">: <strong>{{ variant.name }}</strong></span>
+                        </div>
+                        <div class="pd__vlist">
+                            <button
+                                v-for="v in product.variants"
+                                :key="v.id"
+                                type="button"
+                                role="radio"
+                                class="pd__vbtn"
+                                :class="{ 'is-on': v.id === variantId }"
+                                :aria-checked="v.id === variantId"
+                                :disabled="v.stock < 1"
+                                @click="selectVariant(v)"
+                            >
+                                {{ v.name }}
+                                <small v-if="v.stock < 1">Sold out</small>
+                            </button>
+                        </div>
+                    </div>
 
-                    <div v-if="product.stock > 0" class="pd__buy">
+                    <p class="pd__stock" :class="stockClass">{{ stockText }}</p>
+
+                    <div v-if="maxQty > 0" class="pd__buy">
                         <div class="pd__qty" role="group" aria-label="Quantity">
                             <button type="button" :disabled="qty <= 1" aria-label="Decrease quantity" @click="qty--">
                                 <v-icon size="18">mdi-minus</v-icon>
@@ -59,7 +79,7 @@
                             <span aria-live="polite">{{ qty }}</span>
                             <button
                                 type="button"
-                                :disabled="qty >= product.stock"
+                                :disabled="qty >= maxQty"
                                 aria-label="Increase quantity"
                                 @click="qty++"
                             >
@@ -67,11 +87,15 @@
                             </button>
                         </div>
 
-                        <v-btn color="primary" variant="flat" size="large" class="pd__cta" @click="addToCart">
+                        <v-btn color="primary" variant="flat" size="large" class="pd__cta" :disabled="needsChoice" @click="addToCart">
                             {{ justAdded ? 'Added to cart' : 'Add to cart' }}
                         </v-btn>
-                        <v-btn variant="outlined" size="large" class="pd__ghost" @click="buyNow">Buy now</v-btn>
+                        <v-btn variant="outlined" size="large" class="pd__ghost" :disabled="needsChoice" @click="buyNow">Buy now</v-btn>
                     </div>
+
+                    <p v-if="needsChoice" class="pd__choose">
+                        Please choose a {{ product.variant_label.toLowerCase() }} first.
+                    </p>
 
                     <p v-if="inCart" class="pd__incart">
                         You have {{ inCart }} in your cart.
@@ -121,6 +145,7 @@ export default {
             notFound: false,
             active: 0,
             qty: 1,
+            variantId: null,
             justAdded: false,
             timer: null,
             cart: useCartStore(),
@@ -133,8 +158,41 @@ export default {
             return this.product ? this.product.images[this.active] || this.product.image : null
         },
 
+        variant() {
+            if (!this.product || !this.product.has_variants) return null
+            return this.product.variants.find(v => v.id === this.variantId) || null
+        },
+
+        needsChoice() {
+            return !!this.product && this.product.has_variants && !this.variant
+        },
+
+        // how many of the chosen option can be bought
+        maxQty() {
+            if (!this.product) return 0
+            return this.variant ? this.variant.stock : this.product.stock
+        },
+
+        shownPrice() {
+            return this.variant ? this.variant.price : this.product.price
+        },
+
+        stockClass() {
+            if (this.maxQty < 1) return 'pd__stock--out'
+            if (this.maxQty <= 5 && !this.needsChoice) return 'pd__stock--low'
+            return ''
+        },
+
+        stockText() {
+            if (this.maxQty < 1) return 'Sold out'
+            if (this.needsChoice) return 'In stock'
+            return this.maxQty <= 5 ? `Only ${this.maxQty} left` : 'In stock'
+        },
+
         inCart() {
-            const line = this.product && this.cart.items.find(i => i.id === this.product.id)
+            if (!this.product || this.needsChoice) return 0
+            const key = `${this.product.id}-${this.variant ? this.variant.id : 0}`
+            const line = this.cart.items.find(i => i.key === key)
             return line ? line.qty : 0
         },
 
@@ -166,10 +224,15 @@ export default {
             this.notFound = false
             this.active = 0
             this.qty = 1
+            this.variantId = null
             try {
                 const { data } = await axios.get(`${API}/shop/products/${encodeURIComponent(this.$route.params.slug)}`)
                 this.product = data.product
                 this.related = data.related
+                // a single option needs no choosing
+                if (data.product.variants.length === 1 && data.product.variants[0].stock > 0) {
+                    this.variantId = data.product.variants[0].id
+                }
                 document.title = `${data.product.name} | Kooku Beauty Supplies`
             } catch (e) {
                 this.product = null
@@ -187,15 +250,22 @@ export default {
             }
         },
 
+        selectVariant(variant) {
+            this.variantId = variant.id
+            this.qty = Math.max(1, Math.min(this.qty, variant.stock))
+        },
+
         addToCart() {
-            this.cart.add(this.product, this.qty)
+            if (this.needsChoice) return
+            this.cart.add(this.product, this.qty, this.variant)
             this.justAdded = true
             clearTimeout(this.timer)
             this.timer = setTimeout(() => { this.justAdded = false }, 1600)
         },
 
         buyNow() {
-            this.cart.add(this.product, this.qty)
+            if (this.needsChoice) return
+            this.cart.add(this.product, this.qty, this.variant)
             this.$router.push('/checkout')
         },
     },
@@ -304,6 +374,77 @@ export default {
     font-weight: 700;
     margin: 10px 0 4px;
     font-variant-numeric: tabular-nums;
+}
+
+.pd__price small {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--kbs-muted);
+}
+
+.pd__variants {
+    margin: 0 0 14px;
+}
+
+.pd__vlabel {
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.pd__vlist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.pd__vbtn {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 56px;
+    padding: 8px 16px;
+    border: 2px solid var(--kbs-line);
+    border-radius: 12px;
+    background: #fff;
+    font: inherit;
+    font-weight: 600;
+    color: var(--kbs-ink);
+    cursor: pointer;
+}
+
+.pd__vbtn small {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--kbs-muted);
+}
+
+.pd__vbtn:hover:not(:disabled) {
+    border-color: var(--kbs-brand-soft);
+}
+
+.pd__vbtn.is-on {
+    border-color: var(--kbs-brand);
+    background: #fff1f8;
+    color: var(--kbs-brand);
+}
+
+.pd__vbtn:disabled {
+    color: #a3929c;
+    background: #f7eff3;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+
+.pd__vbtn:focus-visible {
+    outline: 2px solid var(--kbs-ink);
+    outline-offset: 2px;
+}
+
+.pd__choose {
+    margin: 10px 0 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--kbs-warn);
 }
 
 .pd__stock {

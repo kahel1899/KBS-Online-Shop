@@ -4,10 +4,21 @@ import { API } from '../utils.js'
 
 const CART_KEY = 'kbs_cart'
 
+function lineKey(productId, variantId) {
+    return `${productId}-${variantId || 0}`
+}
+
 function readCart() {
     try {
         const saved = JSON.parse(localStorage.getItem(CART_KEY) || '[]')
-        return Array.isArray(saved) ? saved : []
+        if (!Array.isArray(saved)) return []
+        // carts saved before variants existed have no key
+        return saved.map(i => ({
+            variant_id: null,
+            variant_name: '',
+            ...i,
+            key: i.key || lineKey(i.id, i.variant_id),
+        }))
     } catch (e) {
         return []
     }
@@ -21,7 +32,7 @@ function save(items) {
 
 export const useCartStore = defineStore('cart', {
     state: () => ({
-        // { id, slug, name, image, price, stock, qty, unavailable }
+        // { key, id, variant_id, variant_name, slug, name, image, price, stock, qty, unavailable }
         items: readCart(),
     }),
 
@@ -36,21 +47,27 @@ export const useCartStore = defineStore('cart', {
             save(this.items)
         },
 
-        add(product, qty = 1) {
-            const stock = Number(product.stock) || 0
-            const existing = this.items.find(i => i.id === product.id)
+        // variant is optional: pass the chosen { id, name, price, stock } for products that have them
+        add(product, qty = 1, variant = null) {
+            const key = lineKey(product.id, variant ? variant.id : 0)
+            const stock = Number(variant ? variant.stock : product.stock) || 0
+            const price = Number(variant ? variant.price : product.price) || 0
+            const existing = this.items.find(i => i.key === key)
 
             if (existing) {
                 existing.qty = Math.min(existing.qty + qty, Math.max(stock, 1))
                 existing.stock = stock
-                existing.price = product.price
+                existing.price = price
             } else {
                 this.items.push({
+                    key,
                     id: product.id,
+                    variant_id: variant ? variant.id : null,
+                    variant_name: variant ? variant.name : '',
                     slug: product.slug,
                     name: product.name,
                     image: product.image || '',
-                    price: product.price,
+                    price,
                     stock,
                     qty: Math.min(qty, Math.max(stock, 1)),
                     unavailable: false,
@@ -59,15 +76,15 @@ export const useCartStore = defineStore('cart', {
             this.persist()
         },
 
-        setQty(id, qty) {
-            const item = this.items.find(i => i.id === id)
+        setQty(key, qty) {
+            const item = this.items.find(i => i.key === key)
             if (!item) return
             item.qty = Math.max(1, Math.min(Number(qty) || 1, Math.max(item.stock, 1)))
             this.persist()
         },
 
-        remove(id) {
-            this.items = this.items.filter(i => i.id !== id)
+        remove(key) {
+            this.items = this.items.filter(i => i.key !== key)
             this.persist()
         },
 
@@ -80,7 +97,7 @@ export const useCartStore = defineStore('cart', {
         async refresh() {
             if (!this.items.length) return
             try {
-                const ids = this.items.map(i => i.id).join(',')
+                const ids = [...new Set(this.items.map(i => i.id))].join(',')
                 const { data } = await axios.get(`${API}/shop/cart`, { params: { ids } })
                 const fresh = new Map(data.map(p => [p.id, p]))
 
@@ -90,9 +107,23 @@ export const useCartStore = defineStore('cart', {
                         item.unavailable = true
                         return
                     }
+
+                    let variant = null
+                    if (latest.has_variants) {
+                        variant = latest.variants.find(v => v.id === item.variant_id)
+                        if (!variant) {
+                            item.unavailable = true
+                            return
+                        }
+                    } else if (item.variant_id) {
+                        item.unavailable = true
+                        return
+                    }
+
                     item.unavailable = false
-                    item.price = latest.price
-                    item.stock = latest.stock
+                    item.price = variant ? variant.price : latest.price
+                    item.stock = variant ? variant.stock : latest.stock
+                    item.variant_name = variant ? variant.name : ''
                     item.name = latest.name
                     item.slug = latest.slug
                     item.image = latest.image || ''

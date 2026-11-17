@@ -16,6 +16,7 @@ protected $fillable = [
     'selling_price',
     'unit_cost',
      'platform_fee',
+    'variant_name',
 ];
 
     public function product()

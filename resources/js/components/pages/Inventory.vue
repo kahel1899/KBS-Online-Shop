@@ -151,15 +151,12 @@
                             {{ product.is_active && Number(product.online_price) > 0 ? 'Live in shop' : 'Not in shop' }}
                         </span>
 
-                        <dl class="ki-prices">
-                            <div v-for="row in priceRows(product)" :key="row.name">
-                                <dt>
-                                    <span class="ki-dot" :style="{ background: row.color }"></span>
-                                    {{ row.name }}
-                                </dt>
-                                <dd>{{ peso(row.value) }}</dd>
-                            </div>
-                        </dl>
+                        <div class="ki-price">
+                            <span>Price</span>
+                            <strong>
+                                {{ Number(product.online_price) > 0 ? peso(product.online_price) : 'Not set' }}
+                            </strong>
+                        </div>
 
                         <div class="ki-cost">
                             <span>Cost {{ peso(product.cost) }}</span>
@@ -222,7 +219,9 @@
                             <v-col cols="12" sm="6">
                                 <v-text-field
                                     v-model.number="newProduct.quantity"
-                                    label="Stock quantity"
+                                    
+                                    :label="newProduct.variants.length ? 'Total stock (from variants)' : 'Stock quantity'"
+                                    :disabled="newProduct.variants.length > 0"
                                     type="number"
                                     min="0"
                                     variant="outlined"
@@ -244,57 +243,18 @@
                                 />
                             </v-col>
 
-                            <v-col cols="12" sm="4">
-                                <v-text-field
-                                    v-model.number="newProduct.price"
-                                    label="Walk-in price"
-                                    type="number"
-                                    min="0"
-                                    prefix="₱"
-                                    variant="outlined"
-                                    density="comfortable"
-                                    :rules="[nonNegative]"
-                                />
-                            </v-col>
-
-                            <v-col cols="12" sm="4">
-                                <v-text-field
-                                    v-model.number="newProduct.tiktok_price"
-                                    label="TikTok price"
-                                    type="number"
-                                    min="0"
-                                    prefix="₱"
-                                    variant="outlined"
-                                    density="comfortable"
-                                    :rules="[nonNegative]"
-                                />
-                            </v-col>
-
-                            <v-col cols="12" sm="4">
-                                <v-text-field
-                                    v-model.number="newProduct.shopee_price"
-                                    label="Shopee price"
-                                    type="number"
-                                    min="0"
-                                    prefix="₱"
-                                    variant="outlined"
-                                    density="comfortable"
-                                    :rules="[nonNegative]"
-                                />
-                            </v-col>
-
                             <v-col cols="12">
-                                <div class="ki-shopsec">Online shop</div>
+                                <div class="ki-shopsec">Price and online shop</div>
                             </v-col>
 
                             <v-col cols="12" sm="6">
                                 <v-text-field
                                     v-model.number="newProduct.online_price"
-                                    label="Online price"
+                                    label="Price"
                                     type="number"
                                     min="0"
                                     prefix="₱"
-                                    hint="0 keeps it out of the shop"
+                                    hint="Set above 0 to sell it online"
                                     persistent-hint
                                     variant="outlined"
                                     density="comfortable"
@@ -338,6 +298,80 @@
                                     hide-details
                                     density="comfortable"
                                 />
+                            </v-col>
+
+                            <v-col cols="12">
+                                <div class="ki-shopsec">Variants (optional)</div>
+                                <p class="ki-varhelp">
+                                    Use variants for shades, sizes or sets. Each one has its own stock
+                                    and can have its own price.
+                                </p>
+                            </v-col>
+
+                            <v-col v-if="newProduct.variants.length" cols="12">
+                                <v-text-field
+                                    v-model="newProduct.variant_label"
+                                    label="What does the customer choose?"
+                                    placeholder="Shade"
+                                    persistent-placeholder
+                                    hint="Examples: Shade, Size, Color, Set"
+                                    persistent-hint
+                                    maxlength="40"
+                                    variant="outlined"
+                                    density="comfortable"
+                                />
+                            </v-col>
+
+                            <v-col cols="12">
+                                <div
+                                    v-for="(v, i) in newProduct.variants"
+                                    :key="v.uid"
+                                    class="ki-variant"
+                                >
+                                    <v-text-field
+                                        v-model="v.name"
+                                        :label="`Name ${i + 1}`"
+                                        placeholder="e.g. Rose Pink"
+                                        persistent-placeholder
+                                        maxlength="80"
+                                        variant="outlined"
+                                        density="comfortable"
+                                        hide-details
+                                    />
+                                    <v-text-field
+                                        v-model.number="v.price"
+                                        label="Price"
+                                        placeholder="Same as product"
+                                        persistent-placeholder
+                                        type="number"
+                                        min="0"
+                                        prefix="₱"
+                                        variant="outlined"
+                                        density="comfortable"
+                                        hide-details
+                                    />
+                                    <v-text-field
+                                        v-model.number="v.quantity"
+                                        label="Stock"
+                                        type="number"
+                                        min="0"
+                                        variant="outlined"
+                                        density="comfortable"
+                                        hide-details
+                                    />
+                                    <button
+                                        type="button"
+                                        class="ki-variant__remove"
+                                        :aria-label="`Remove variant ${i + 1}`"
+                                        @click="removeVariant(i)"
+                                    >
+                                        <v-icon size="20">mdi-close</v-icon>
+                                    </button>
+                                </div>
+
+                                <v-btn variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addVariant">
+                                    Add variant
+                                </v-btn>
                             </v-col>
                         </v-row>
                     </v-card-text>
@@ -395,6 +429,15 @@
                             label="Product"
                             placeholder="Choose a product"
                             :hint="selectedSaleProduct ? `${selectedSaleProduct.quantity} in stock` : ''"
+                        />
+
+                        <DropSelect
+                            v-if="saleVariants.length"
+                            v-model="newSale.variant_id"
+                            :items="variantItems"
+                            :label="selectedSaleProduct.variant_label || 'Option'"
+                            placeholder="Choose one"
+                            class="mt-4"
                         />
 
                         <DropSelect
@@ -511,7 +554,10 @@
                                 <tbody>
                                     <tr v-for="sale in sales" :key="sale.id">
                                         <td class="text-no-wrap">{{ formatDate(sale.created_at) }}</td>
-                                        <td>{{ sale.product?.name || 'Deleted product' }}</td>
+                                        <td>
+                                            {{ sale.product?.name || 'Deleted product' }}
+                                            <small v-if="sale.variant_name" class="ki-histvar">{{ sale.variant_name }}</small>
+                                        </td>
                                         <td class="text-no-wrap">
                                             <span class="ki-dot" :style="{ background: platformColor(sale.platform) }"></span>
                                             {{ sale.platform || 'Unassigned' }}
@@ -570,20 +616,20 @@ const emptyProduct = () => ({
     image: '',
     name: '',
     quantity: 0,
-    price: 0,
     cost: 0,
-    tiktok_price: 0,
-    shopee_price: 0,
     category_id: null,
     description: '',
     online_price: 0,
     is_active: false,
     is_featured: false,
     photos: [],
+    variant_label: '',
+    variants: [],
 })
 
 const emptySale = () => ({
     product_id: null,
+    variant_id: null,
     platform: '',
     quantity: 1,
     selling_price: 0,
@@ -715,17 +761,42 @@ export default {
             );
         },
 
-        // The price you listed for the chosen product on the chosen platform
+        saleVariants() {
+            const p = this.selectedSaleProduct
+            return p && p.variants ? p.variants : []
+        },
+
+        variantItems() {
+            return this.saleVariants.map(v => {
+                const qty = Number(v.quantity) || 0
+                return {
+                    value: v.id,
+                    title: v.name,
+                    subtitle: qty < 1 ? 'Out of stock' : `${qty} in stock`,
+                    disabled: qty < 1,
+                }
+            })
+        },
+
+        selectedVariant() {
+            return this.saleVariants.find(v => v.id === this.newSale.variant_id) || null
+        },
+
+        // How many can be sold: the chosen variant's stock, or the product's stock
+        saleStock() {
+            const p = this.selectedSaleProduct
+            if (!p) return 0
+            if (this.saleVariants.length) return this.selectedVariant ? Number(this.selectedVariant.quantity) : 0
+            return Number(p.quantity)
+        },
+
+        // The price you set: the variant's own price, or the product's
         suggestedPrice() {
             const p = this.selectedSaleProduct
             if (!p) return 0
-            switch (this.newSale.platform) {
-                case 'TikTok': return Number(p.tiktok_price) || 0
-                case 'Shopee': return Number(p.shopee_price) || 0
-                case 'Online': return Number(p.online_price) || 0
-                case 'Walk-in': return Number(p.price) || 0
-                default: return 0
-            }
+            const v = this.selectedVariant
+            if (v && v.price !== null && v.price !== undefined && v.price !== '') return Number(v.price) || 0
+            return Number(p.online_price) || 0
         },
 
         saleValid() {
@@ -734,10 +805,11 @@ export default {
             const price = this.newSale.selling_price
             return (
                 !!p &&
+                (this.saleVariants.length === 0 || !!this.selectedVariant) &&
                 !!this.newSale.platform &&
                 Number.isInteger(qty) &&
                 qty >= 1 &&
-                qty <= Number(p.quantity) &&
+                qty <= this.saleStock &&
                 price !== '' &&
                 price !== null &&
                 Number(price) >= 0
@@ -754,9 +826,10 @@ export default {
 
         productValid() {
             const p = this.newProduct
-            const fields = ['quantity', 'cost', 'price', 'tiktok_price', 'shopee_price', 'online_price']
+            const fields = ['quantity', 'cost', 'online_price']
             return (
                 !!String(p.name || '').trim() &&
+                (p.variants || []).every(v => String(v.name || '').trim() && v.quantity !== '' && Number(v.quantity) >= 0) &&
                 fields.every(f => p[f] === 0 || (p[f] !== '' && p[f] !== null && Number(p[f]) >= 0))
             )
         },
@@ -776,7 +849,20 @@ export default {
     watch: {
         // Fill in the listed price when the product or platform changes
         'newSale.product_id'() {
+            this.newSale.variant_id = null
             this.applySuggestedPrice()
+        },
+        'newSale.variant_id'() {
+            this.applySuggestedPrice()
+        },
+        // With variants, the product's stock is the total of its variants
+        'newProduct.variants': {
+            deep: true,
+            handler(list) {
+                if (list.length) {
+                    this.newProduct.quantity = list.reduce((sum, v) => sum + (Number(v.quantity) || 0), 0)
+                }
+            },
         },
         'newSale.platform'() {
             this.applySuggestedPrice()
@@ -808,8 +894,24 @@ export default {
             const p = this.selectedSaleProduct
             const n = Number(value)
             if (!Number.isInteger(n) || n < 1) return 'Enter a whole number, 1 or more'
-            if (p && n > Number(p.quantity)) return `Only ${p.quantity} in stock`
+            if (p && (this.saleVariants.length === 0 || this.selectedVariant) && n > this.saleStock) {
+                return `Only ${this.saleStock} in stock`
+            }
             return true
+        },
+
+        addVariant() {
+            this.newProduct.variants.push({
+                uid: Date.now() + Math.random(),
+                id: null,
+                name: '',
+                price: '',
+                quantity: 0,
+            })
+        },
+
+        removeVariant(index) {
+            this.newProduct.variants.splice(index, 1)
         },
 
         stockTone(product) {
@@ -821,22 +923,15 @@ export default {
 
         stockText(product) {
             const qty = Number(product.quantity) || 0
-            if (qty <= 0) return 'Out of stock'
-            if (qty <= LOW_STOCK) return `Only ${qty} left`
-            return `${qty} in stock`
-        },
-
-        priceRows(product) {
-            return [
-                { name: 'Walk-in', color: platformColor('Walk-in'), value: product.price },
-                { name: 'TikTok', color: platformColor('TikTok'), value: product.tiktok_price },
-                { name: 'Shopee', color: platformColor('Shopee'), value: product.shopee_price },
-                { name: 'Online', color: platformColor('Online'), value: product.online_price },
-            ]
+            const n = product.variants ? product.variants.length : 0
+            const extra = n ? `, ${n} ${n === 1 ? 'variant' : 'variants'}` : ''
+            if (qty <= 0) return 'Out of stock' + extra
+            if (qty <= LOW_STOCK) return `Only ${qty} left` + extra
+            return `${qty} in stock` + extra
         },
 
         margin(product) {
-            const price = Number(product.price)
+            const price = Number(product.online_price)
             if (!price) return null
             return Math.round(((price - Number(product.cost || 0)) / price) * 100)
         },
@@ -891,6 +986,14 @@ export default {
                 is_active: !!product.is_active,
                 is_featured: !!product.is_featured,
                 photos: [product.image, ...(product.images || []).map(i => i.url)].filter(Boolean),
+                variant_label: product.variant_label || '',
+                variants: (product.variants || []).map(v => ({
+                    uid: v.id,
+                    id: v.id,
+                    name: v.name,
+                    price: v.price === null || v.price === undefined ? '' : Number(v.price),
+                    quantity: Number(v.quantity) || 0,
+                })),
             };
             this.dialog = true
         },
@@ -905,16 +1008,20 @@ export default {
                 name: String(p.name).trim(),
                 image: (p.photos && p.photos[0]) || null,
                 quantity: Number(p.quantity) || 0,
-                price: Number(p.price) || 0,
                 cost: Number(p.cost) || 0,
-                tiktok_price: Number(p.tiktok_price) || 0,
-                shopee_price: Number(p.shopee_price) || 0,
                 category_id: p.category_id || null,
                 description: (p.description || '').trim() || null,
                 online_price: Number(p.online_price) || 0,
                 is_active: !!p.is_active,
                 is_featured: !!p.is_featured,
                 images: (p.photos || []).slice(1),
+                variant_label: (p.variant_label || '').trim() || null,
+                variants: (p.variants || []).map(v => ({
+                    id: v.id || null,
+                    name: String(v.name).trim(),
+                    price: v.price === '' || v.price === null ? null : Number(v.price),
+                    quantity: Number(v.quantity) || 0,
+                })),
             }
 
             try {
@@ -973,6 +1080,7 @@ export default {
 
             const payload = {
                 product_id: this.newSale.product_id,
+                variant_id: this.newSale.variant_id || null,
                 platform: this.newSale.platform,
                 quantity: Number(this.newSale.quantity),
                 selling_price: Number(this.newSale.selling_price),
@@ -1192,6 +1300,53 @@ export default {
     font-size: 16px;
 }
 
+.ki-varhelp {
+    margin: 4px 0 0;
+    font-size: 13.5px;
+    color: var(--kbs-muted);
+}
+
+.ki-variant {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 90px 36px;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.ki-variant__remove {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--kbs-loss);
+    cursor: pointer;
+}
+
+.ki-variant__remove:hover {
+    background: #fbe3e1;
+}
+
+.ki-variant__remove:focus-visible {
+    outline: 2px solid var(--kbs-brand);
+}
+
+.ki-histvar {
+    display: block;
+    color: var(--kbs-muted);
+}
+
+@media (max-width: 560px) {
+    .ki-variant {
+        grid-template-columns: 1fr 1fr 36px;
+    }
+
+    .ki-variant > :first-child {
+        grid-column: 1 / span 3;
+    }
+}
+
 .ki-fullselect {
     width: 100%;
 }
@@ -1199,6 +1354,25 @@ export default {
 .ki-chip {
     align-self: flex-start;
     margin-bottom: 12px;
+}
+
+.ki-price {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 0;
+    border-top: 1px solid var(--kbs-line);
+    border-bottom: 1px solid var(--kbs-line);
+}
+
+.ki-price span {
+    color: var(--kbs-muted);
+    font-size: 14px;
+}
+
+.ki-price strong {
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
 }
 
 .ki-prices {

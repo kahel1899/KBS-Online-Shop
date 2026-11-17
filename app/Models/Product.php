@@ -25,6 +25,7 @@ protected $fillable = [
     'online_price',
     'is_active',
     'is_featured',
+    'variant_label',
 ];
 
     protected $casts = [
@@ -47,6 +48,23 @@ protected $fillable = [
 {
     return $this->hasMany(Sale::class);
 }
+
+    // Shades, sizes, sets... each with its own stock and optional price
+    public function variants()
+    {
+        return $this->hasMany(ProductVariant::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    // With variants, the product's stock is the total of its variants
+    public function syncQuantity(): void
+    {
+        $query = ProductVariant::where('product_id', $this->id);
+
+        if ($query->exists()) {
+            $this->quantity = (int) $query->sum('quantity');
+            $this->save();
+        }
+    }
 
     public function category()
     {

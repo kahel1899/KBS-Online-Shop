@@ -35,11 +35,33 @@ class Present
             ];
         }
 
+        // Variants: each one has its own stock and (optionally) its own price
+        $variants = [];
+        if ($product->relationLoaded('variants')) {
+            foreach ($product->variants as $variant) {
+                $variants[] = [
+                    'id' => $variant->id,
+                    'name' => $variant->name,
+                    'price' => $variant->price !== null
+                        ? (float) $variant->price
+                        : (float) $product->online_price,
+                    'stock' => (int) $variant->quantity,
+                ];
+            }
+        }
+
+        $hasVariants = count($variants) > 0;
+        $prices = $hasVariants ? array_column($variants, 'price') : [(float) $product->online_price];
+
         $data = [
             'id' => $product->id,
             'name' => $product->name,
             'slug' => $product->slug,
-            'price' => (float) $product->online_price,
+            'price' => (float) min($prices),
+            'price_max' => (float) max($prices),
+            'has_variants' => $hasVariants,
+            'variant_label' => $product->variant_label ?: 'Option',
+            'variants' => $variants,
             'image' => $product->image ?: ($extra[0] ?? null),
             'stock' => (int) $product->quantity,
             'is_featured' => (bool) $product->is_featured,
@@ -90,6 +112,7 @@ class Present
                 return [
                     'id' => $item->id,
                     'product_id' => $item->product_id,
+                    'variant_name' => $item->variant_name,
                     'name' => $item->product_name,
                     'image' => $item->product_image,
                     'price' => (float) $item->unit_price,

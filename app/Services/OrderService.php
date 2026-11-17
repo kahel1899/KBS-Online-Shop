@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Sale;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -40,23 +41,30 @@ class OrderService
     public function place(array $data, ?User $user): Order
     {
         return DB::transaction(function () use ($data, $user) {
-            // Same product twice in the cart becomes one line
+            // The same product (and same variant) twice becomes one line
             $lines = [];
             foreach ($data['items'] as $item) {
-                $id = (int) $item['product_id'];
-                $lines[$id] = ($lines[$id] ?? 0) + (int) $item['quantity'];
+                $productId = (int) $item['product_id'];
+                $variantId = ! empty($item['variant_id']) ? (int) $item['variant_id'] : 0;
+                $key = $productId . ':' . $variantId;
+
+                if (! isset($lines[$key])) {
+                    $lines[$key] = ['product_id' => $productId, 'variant_id' => $variantId, 'quantity' => 0];
+                }
+                $lines[$key]['quantity'] += (int) $item['quantity'];
             }
 
+            $productIds = collect($lines)->pluck('product_id')->unique()->values()->all();
+
             // Lock the rows so two customers can't buy the last item together
-            $products = Product::whereIn('id', array_keys($lines))
-                ->lockForUpdate()
-                ->get()
-                ->keyBy('id');
+            $products = Product::whereIn('id', $productIds)->lockForUpdate()->get()->keyBy('id');
+            $variants = ProductVariant::whereIn('product_id', $productIds)->lockForUpdate()->get()->keyBy('id');
 
             $subtotal = 0.0;
+            $prepared = [];
 
-            foreach ($lines as $id => $quantity) {
-                $product = $products->get($id);
+            foreach ($lines as $line) {
+                $product = $products->get($line['product_id']);
 
                 if (! $product || ! $product->is_active || (float) $product->online_price <= 0) {
                     throw ValidationException::withMessages([
@@ -64,15 +72,46 @@ class OrderService
                     ]);
                 }
 
-                if ((int) $product->quantity < $quantity) {
+                $variant = null;
+                $productHasVariants = $variants->where('product_id', $product->id)->isNotEmpty();
+
+                if ($productHasVariants) {
+                    $variant = $variants->get($line['variant_id']);
+
+                    if (! $variant || (int) $variant->product_id !== (int) $product->id) {
+                        throw ValidationException::withMessages([
+                            'items' => "Please choose an option for {$product->name}.",
+                        ]);
+                    }
+                } elseif ($line['variant_id'] !== 0) {
                     throw ValidationException::withMessages([
-                        'items' => (int) $product->quantity > 0
-                            ? "Only {$product->quantity} left of {$product->name}."
-                            : "{$product->name} is sold out.",
+                        'items' => 'An item in your cart is no longer available. Please review your cart.',
                     ]);
                 }
 
-                $subtotal += round((float) $product->online_price * $quantity, 2);
+                $label = $variant ? "{$product->name} ({$variant->name})" : $product->name;
+                $stock = $variant ? (int) $variant->quantity : (int) $product->quantity;
+
+                if ($stock < $line['quantity']) {
+                    throw ValidationException::withMessages([
+                        'items' => $stock > 0
+                            ? "Only {$stock} left of {$label}."
+                            : "{$label} is sold out.",
+                    ]);
+                }
+
+                $price = ($variant && $variant->price !== null)
+                    ? (float) $variant->price
+                    : (float) $product->online_price;
+
+                $subtotal += round($price * $line['quantity'], 2);
+
+                $prepared[] = [
+                    'product' => $product,
+                    'variant' => $variant,
+                    'quantity' => $line['quantity'],
+                    'price' => $price,
+                ];
             }
 
             $shippingFee = $this->shippingFee($subtotal);
@@ -101,22 +140,29 @@ class OrderService
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            foreach ($lines as $id => $quantity) {
-                $product = $products->get($id);
-                $price = (float) $product->online_price;
+            foreach ($prepared as $row) {
+                $product = $row['product'];
+                $variant = $row['variant'];
 
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $product->id,
+                    'variant_id' => $variant ? $variant->id : null,
+                    'variant_name' => $variant ? $variant->name : null,
                     'product_name' => $product->name,
                     'product_image' => $product->image,
-                    'unit_price' => $price,
+                    'unit_price' => $row['price'],
                     'unit_cost' => (float) $product->cost,
-                    'quantity' => $quantity,
-                    'line_total' => round($price * $quantity, 2),
+                    'quantity' => $row['quantity'],
+                    'line_total' => round($row['price'] * $row['quantity'], 2),
                 ]);
 
-                $product->decrement('quantity', $quantity);
+                if ($variant) {
+                    $variant->decrement('quantity', $row['quantity']);
+                    $product->syncQuantity();
+                } else {
+                    $product->decrement('quantity', $row['quantity']);
+                }
             }
 
             Payment::create([
@@ -261,7 +307,18 @@ class OrderService
     private function restock(Order $order): void
     {
         foreach ($order->items as $item) {
-            if ($item->product_id) {
+            if ($item->variant_id) {
+                $variant = ProductVariant::find($item->variant_id);
+
+                if ($variant) {
+                    $variant->increment('quantity', $item->quantity);
+
+                    $product = Product::find($variant->product_id);
+                    if ($product) {
+                        $product->syncQuantity();
+                    }
+                }
+            } elseif ($item->product_id && ! $item->variant_name) {
                 Product::where('id', $item->product_id)->increment('quantity', $item->quantity);
             }
         }
@@ -278,6 +335,7 @@ class OrderService
             Sale::create([
                 'product_id' => $item->product_id,
                 'platform' => 'Online',
+                'variant_name' => $item->variant_name,
                 'quantity' => $item->quantity,
                 'selling_price' => $item->unit_price,
                 'unit_cost' => $item->unit_cost,

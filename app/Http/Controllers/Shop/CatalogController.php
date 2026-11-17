@@ -52,7 +52,7 @@ class CatalogController extends Controller
 
     public function products(Request $request)
     {
-        $query = Product::forShop()->with('category');
+        $query = Product::forShop()->with(['category', 'variants']);
 
         $search = trim((string) $request->query('search'));
         if ($search !== '') {
@@ -101,12 +101,12 @@ class CatalogController extends Controller
     public function show($slug)
     {
         $product = Product::published()
-            ->with(['category', 'images'])
+            ->with(['category', 'images', 'variants'])
             ->where('slug', $slug)
             ->firstOrFail();
 
         $related = Product::forShop()
-            ->with('category')
+            ->with(['category', 'variants'])
             ->where('id', '!=', $product->id)
             ->when($product->category_id, function ($q) use ($product) {
                 $q->where('category_id', $product->category_id);
@@ -139,7 +139,7 @@ class CatalogController extends Controller
             ->all();
 
         $products = Product::published()
-            ->with('category')
+            ->with(['category', 'variants'])
             ->whereIn('id', $ids)
             ->get()
             ->map(function ($product) {
